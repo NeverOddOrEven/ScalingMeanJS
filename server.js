@@ -11,10 +11,6 @@ var init = require('./config/init')(),
         mongoose = require('mongoose'),
         amqpService = require('./management/amqp');
 
-// This must be called in all processes before they request
-// the service object. 
-amqpService.initialize(config.amqpPath);
-
 /**
  * Main application entry file.
  * Please note that the order of loading is important.
@@ -30,6 +26,8 @@ var app = require('./config/express')(db);
 require('./config/passport')();
 
 if (cluster.isMaster) {
+  amqpService.initialize(config.amqpPath);
+  
   var debug = process.execArgv.indexOf('--debug') !== -1;
     cluster.setupMaster({
     execArgv: process.execArgv.filter(function(s) { return s !== '--debug'; })

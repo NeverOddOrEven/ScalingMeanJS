@@ -14,6 +14,7 @@ function AmqpManager() {
     };
     
     function initialize(amqpServerPath) {
+        console.info('AMQP Service Initialized');
         commObject.serverPath = amqpServerPath;
     }
     
@@ -151,16 +152,17 @@ function AmqpManager() {
         }
     }
 
-    function service() {
+    function service(pathToAmqp) {
+      if (pathToAmqp)
+        initialize(pathToAmqp);
+      
       if (commObject.serverPath !== null) {
         return {
           sendMessage: asyncSendMessage,   /* Param @payload: { messageObject: '' } */
           addConsumer: addConsumer,   /* Param @payload: { consumerCallback: function() {} } */
         };
       } else {
-        return {
-          initialize: initialize
-        };
+        return null;
       }
     }
 

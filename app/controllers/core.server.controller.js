@@ -1,10 +1,13 @@
 'use strict';
 
+var MessageService = require('../services/messaging');
+
 /**
  * Module dependencies.
  */
 exports.index = function(req, res) {
-	res.render('index', {
+	console.log(MessageService.debugInfo());
+  res.render('index', {
 		user: req.user || null
 	});
 };
