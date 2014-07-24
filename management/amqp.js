@@ -151,10 +151,22 @@ function AmqpManager() {
         }
     }
 
+    function service() {
+      if (commObject.serverPath !== null) {
+        return {
+          sendMessage: asyncSendMessage,   /* Param @payload: { messageObject: '' } */
+          addConsumer: addConsumer,   /* Param @payload: { consumerCallback: function() {} } */
+        };
+      } else {
+        return {
+          initialize: initialize
+        };
+      }
+    }
+
     return {
-        sendMessage: asyncSendMessage,   /* Param @payload: { messageObject: '' } */
-        addConsumer: addConsumer,   /* Param @payload: { consumerCallback: function() {} } */
-        initialize: initialize
+        initialize: initialize,
+        service: service
     };
 }
 

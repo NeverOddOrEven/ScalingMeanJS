@@ -2,7 +2,8 @@
 
 module.exports = {
 	db: 'mongodb://localhost/mean-dev',
-	app: {
+        amqpPath: 'amqp://localhost',
+        app: {
 		title: 'MEAN.JS - Development Environment'
 	},
 	facebook: {

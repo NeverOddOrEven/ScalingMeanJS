@@ -8,7 +8,12 @@ var init = require('./config/init')(),
         os = require('os'),
         monitor = require('./management/cluster'),
         config = require('./config/config'),
-        mongoose = require('mongoose');
+        mongoose = require('mongoose'),
+        amqpService = require('./management/amqp');
+
+// This must be called in all processes before they request
+// the service object. 
+amqpService.initialize(config.amqpPath);
 
 /**
  * Main application entry file.
