@@ -9,7 +9,7 @@ var init = require('./config/init')(),
         monitor = require('./management/cluster'),
         config = require('./config/config'),
         mongoose = require('mongoose'),
-        amqpService = require('./management/amqp');
+        coremessaging = require('./management/coremessaging');
 
 /**
  * Main application entry file.
@@ -26,7 +26,16 @@ var app = require('./config/express')(db);
 require('./config/passport')();
 
 if (cluster.isMaster) {
-  amqpService.initialize(config.amqpPath);
+  coremessaging.initializeAmqp(config.amqpPath);
+  
+  var emitMessageToWorkers = function(message) {
+    _.forEach(cluster.workers, function(worker) {
+      if (message.originalSenderProcessId != worker.process.pid) {
+        worker.send(message);
+      } 
+    });
+  };
+  coremessaging.connectMasterIpcListener(emitMessageToWorkers);
   
   var debug = process.execArgv.indexOf('--debug') !== -1;
     cluster.setupMaster({
@@ -37,57 +46,73 @@ if (cluster.isMaster) {
   var debugPort = config.debugPort || 5858;
   var coreCount = os.cpus().length;
   
-  cluster.on('exit', function(oldWorker, code, signal) {
-    console.dir(arguments);
-    if (debug) {
-      var workerDebugPort = oldWorker.debugPort;
-      cluster.settings.execArgv.push('--debug=' + workerDebugPort);
-      var newWorker = cluster.fork();
-      _.assign(newWorker, {debugPort: workerDebugPort});
-      cluster.settings.execArgv.pop();
-    } else {
-      cluster.fork();
-    }
-  });
-
-  for (var i = 1; i <= (config.workers || coreCount); ++i) {
-    if (debug) {
-      var workerDebugPort = debugPort + i;
-      cluster.settings.execArgv.push('--debug=' + workerDebugPort);
-      var worker = cluster.fork();
-      _.assign(worker, {debugPort: workerDebugPort});
-      cluster.settings.execArgv.pop();
-    }
-    else {
-      cluster.fork();
-    }
-  }
-  var processIds = _.mapValues(cluster.workers, function(worker) { return worker.process.pid; });
-
-  var initializeWorkerHttpProcess = function (process) {
-    process.on('online', function() {
-      process.send({type: 'monitor', port: port, debugPort: process.debugPort, processes: processIds});
+  var updateMonitor = function() {
+    var processIds = _.mapValues(cluster.workers, function(worker) { return worker.process.pid; });
+    _.forEach(cluster.workers, function(worker) {
+      worker.send({type: 'updatemonitor', processes: processIds});
     });
-
-    cluster.on('exit', function(worker, code, signal) {
-      console.info('Worker ' + worker.process.pid + ' died');
+  }
+  
+  var initializeWorkerHttpProcess = function (worker) {
+    worker.on('online', function() {
+      worker.send({type: 'httpstart', port: port, debugPort: process.debugPort});
+      updateMonitor();
+    });
+    worker.on('listening', function() {
+      // The HTTP server is now accepting requests
+    });
+    worker.on('message', function(message) {
+      // A worker sent master a message
+      if (message.type === 'comm') {
+        emitMessageToWorkers(message);
+      }
     });
   };
   
-  for (var key in cluster.workers) {
-    initializeWorkerHttpProcess(cluster.workers[key]);
+  var spawnWorker = function(deadWorker, debugPort) {
+    if (!debug)
+      return cluster.fork();
+    
+    var workerDebugPort = deadWorker === null ? debugPort : deadWorker.debugPort;
+    cluster.settings.execArgv.push('--debug=' + workerDebugPort);
+    var newWorker = cluster.fork();
+    _.assign(newWorker, {debugPort: workerDebugPort});
+    cluster.settings.execArgv.pop();
+    
+    return newWorker;
   }
   
+  // Spin up HTTP servers
+  for (var i = 1; i <= (config.workers || coreCount); ++i) {
+    var newWorker = spawnWorker(null, debugPort + i);
+    initializeWorkerHttpProcess(newWorker);
+  }
+  
+  // If an HTTP server dies, respawn it
+  cluster.on('exit', function(oldWorker, code, signal) {
+    var newWorker = spawnWorker(oldWorker, null);
+    initializeWorkerHttpProcess(newWorker);
+    updateMonitor();
+  });
 } else {
+  coremessaging.connectMasterIpcListener(
+    function(message) {
+      cluster.worker.send(message);
+    }
+  );
+  
   cluster.worker.on('message', function(message) {
-    if (message.type === 'monitor') {
+    if (message.type === 'httpstart') {
       var processId = cluster.worker.process.pid;
       console.log('Process: ' + processId + ', listening on port: ' + message.port + '...');
       app.listen(message.port);
       monitor.setPort(message.port);
       monitor.setDebugPort(message.debugPort);
-      monitor.setProcess(processId);
+      monitor.setProcess(processId); 
+    } else if (message.type === 'updatemonitor') {
       monitor.setProcesses(message.processes);
+    } else if (message.type === 'comm') {
+      coremessaging.getOnMessageToWorkerIpcConsumer()(message);
     }
   });
 }

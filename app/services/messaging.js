@@ -10,42 +10,45 @@ var _ = require('lodash');
 
 
 var MessageService = function() {
-  var _amqp;
+  var _amqp = null;
   
   function initialize(amqpServerPath) {
-    if (cluster.isMaster) {
+    if (cluster.isMaster && _amqp === null) {
       var amqpService = require('../../management/amqp');
       amqpServerPath 
-        ? _amqp = amqpServerPath.service(amqpServerPath) 
-        : _amqp = amqpServerPath.service();
+        ? _amqp = amqpService.service(amqpServerPath) 
+        : _amqp = amqpService.service();
       
-      _amqp.addConsumer(onAmqpMessage);
+      if (_amqp !== null)
+        _amqp.addConsumer(onAmqpMessage);
+      
+      return this;
     }
   }
   
-  function registerWorker(worker, callback) {
-      worker.on('message', function(message) {
-        // Other messages get sent; ignore them unless they are 'comm' messages
-        if (!message.type || message.type !== 'comm')
-          return;
-        
-        if (cluster.isMaster) {
-          // Send out to message bus
-          _amqp.sendMessage(message);
+  function registerListener(worker, callback) {
+    /*cluster.worker.on('message', function(message) {
+      // Other messages get sent; ignore them unless they are 'comm' messages
+      if (!message.type || message.type !== 'comm')
+        return;
 
-          // Send out to the other processes
-          var relevantWorkers = _.select(cluster.workers, function (w) {
-            return w.process.pid !== message.originalSenderProcessId;
-          });
-          sendMessageTo(relevantWorkers, message);
-        }
-        
-        if (cluster.isWorker) {
-          callback(message);
-        }
-      });
-    }
+      if (cluster.isMaster) {
+        // Send out to message bus
+        sendMessageToExchange(message);
+
+        // Send out to the other processes
+        var relevantWorkers = _.select(cluster.workers, function (w) {
+          return w.process.pid !== message.originalSenderProcessId;
+        });
+        sendMessageTo(relevantWorkers, message);
+      }
+
+      if (cluster.isWorker) {
+        callback(message);
+      }
+    });*/
   }
+  
   
   // Message broker
   function onAmqpMessage(message) {
@@ -56,76 +59,65 @@ var MessageService = function() {
       console.error('workers should not be receiving amqp messages...');
   }
   
+  function sendMessageToExchange(message) {
+    if (_amqp !== null)
+      _amqp.sendMessage(message);
+    else
+      console.info('Not able to send message to exchange...');
+  }
+
   function sendMessageTo(workers, message) {
     _.forEach(workers, function(worker) {
       worker.send(message);
     });
   }
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  function processMessageFromAmqp(message) {
-    if (cluster.isMaster) {
-      cluster.sendMessage(message);
-    }
-    
-    if (cluster.isWorker) {
-      console.error('This code should never be reached unless worker processes are allowed to listen to AMQP channels.');
-    }
-  }
-  
-  function sendMessage(message, exceptProcessId) {
-    //
-    // A master node needs to communicate with all child processes, as well as the world
-    //
-    if (cluster.isMaster) {
-      // Tell all other master listeners
-      amqpService.sendMessage(message);
-      
-      // Tell all local processes, except the one specified (because it's the message origin)
-      _.forEach(cluster.workers, 
-                  function(worker) { 
-                    if (worker.process.pid !== exceptProcessId) {
-                      worker.send(message);
-                    }
-                  }
-               );
-    } 
-    
-    //
-    // If a worker is trying to send a message, the next stop is the master node
-    //
-    if (cluster.isWorker) {
-      cluster.worker.sendMessage(message);
-    }
-  }
 
-  function debugInfo() {
-    console.info(cluster);
+  
+  function sendMessage(message) {
+    var wrapMessage = function(message) {
+      return {
+        type: 'comm',
+        originalSenderProcessId: cluster.worker.process.pid,
+        message: message
+      };
+    }
+    
+    if (cluster.isMaster) {
+      console.info('Sending messages from the master process not supported at this time...');
+      //var wrappedMessage = wrapMessage(message);
+      //sendMessageToExchange(wrappedMessage);
+      //sendMessageTo(cluster.workers, wrappedMessage);
+    }
+    
+    if (cluster.isWorker) {
+      cluster.worker.send(wrapMessage(message));
+    }
+  }
+  
+  function addOutboundAmqpCallback(cb) {
+    _outboundAmqpCb = cb;
+  }
+  
+  function addOutboundIpcCallback(cb) {
+    _outboundIpcCb = cb;
+  }
+  
+  // Master process received a message
+  function onAmqpMessage(message) {
+    
+  }
+  
+  // Master process received a message
+  function onMasterIpcMessage(message) {
+  }
+  
+  // Worker received a message
+  function onWorkerIpcMessage(message) {
   }
   
   return {
-    init: initialize(),
-    addProcessCallback: addProcessCallback,
+    initialize: initialize,
+    registerListener: registerListener,
     sendMessage: sendMessage
   };
 };

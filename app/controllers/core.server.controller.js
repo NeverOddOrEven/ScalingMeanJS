@@ -1,6 +1,13 @@
 'use strict';
 
-var MessageService = require('../services/messaging');
+//var cluster = require('cluster'),
+//    MessageService = require('../services/messaging').initialize();
+
+//MessageService.registerListener(cluster.worker, listenForMessages);
+
+var listenForMessages = function(message) {
+  console.log('Core.Server.Controller received the message');
+}
 
 /**
  * Module dependencies.
