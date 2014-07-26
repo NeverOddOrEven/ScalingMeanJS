@@ -9,6 +9,7 @@ var init = require('./config/init')(),
         monitor = require('./management/cluster'),
         config = require('./config/config'),
         mongoose = require('mongoose'),
+        commandLineParser = require('./config/utilities/commandLineParser'),
         coremessaging = require('./management/coremessaging');
 
 /**
@@ -26,14 +27,17 @@ var app = require('./config/express')(db);
 require('./config/passport')();
 
 if (cluster.isMaster) {
+  var commandLineArguments = commandLineParser.parse();
   coremessaging.initializeAmqp(config.amqpPath);
-  
-  var emitMessageToWorkers = function(message) {
+ 
+  var emitMessageToWorkers = function(message, fromWorker) {
     _.forEach(cluster.workers, function(worker) {
-      if (message.originalSenderProcessId != worker.process.pid) {
+      if (message.originalSenderProcessId !== worker.process.pid) {
         worker.send(message);
       } 
     });
+    if (fromWorker)
+      coremessaging.emitToAmqp(message);
   };
   coremessaging.connectMasterIpcListener(emitMessageToWorkers);
   
@@ -42,7 +46,7 @@ if (cluster.isMaster) {
     execArgv: process.execArgv.filter(function(s) { return s !== '--debug'; })
   });
   
-  var port = config.port || 3000;
+  var port = commandLineArguments.port || config.port || 3000;
   var debugPort = config.debugPort || 5858;
   var coreCount = os.cpus().length;
   
@@ -64,7 +68,7 @@ if (cluster.isMaster) {
     worker.on('message', function(message) {
       // A worker sent master a message
       if (message.type === 'comm') {
-        emitMessageToWorkers(message);
+        emitMessageToWorkers(message, true);
       }
     });
   };

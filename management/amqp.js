@@ -86,7 +86,7 @@ function AmqpManager() {
             commObject.channel.bindQueue(commObject.outboundQueue, commObject.exchangeName, commObject.routingPattern);
             commObject.channel.publish(commObject.exchangeName, 
                                        commObject.routingPattern, 
-                                       new Buffer(JSON.stringify(payload.messageObject)));
+                                       new Buffer(JSON.stringify(payload)));
             cb();
         }
 
@@ -158,7 +158,7 @@ function AmqpManager() {
       
       if (commObject.serverPath !== null) {
         return {
-          sendMessage: asyncSendMessage,   /* Param @payload: { messageObject: '' } */
+          sendMessage: asyncSendMessage,   /* Param @payload: {} */
           addConsumer: addConsumer,   /* Param @payload: { consumerCallback: function() {} } */
         };
       } else {

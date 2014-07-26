@@ -1,13 +1,21 @@
 'use strict';
 
-//var cluster = require('cluster'),
-//    MessageService = require('../services/messaging').initialize();
+var messaging = require('../services/messaging');
 
-//MessageService.registerListener(cluster.worker, listenForMessages);
+  (function() {
+    setTimeout(function() {
+      messaging.publish('magic' + process.pid);
+    }, 5000);
+  })();
+  
 
-var listenForMessages = function(message) {
-  console.log('Core.Server.Controller received the message');
-}
+messaging.subscribe(function(message) {
+  console.log('1 - ' + message);
+});
+
+messaging.subscribe(function(message) {
+  console.log('2 - ' + message);
+});
 
 /**
  * Module dependencies.

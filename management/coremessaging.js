@@ -1,21 +1,22 @@
 var amqp = require('./amqp');
 var _ = require('lodash');
 var cluster = require('cluster');
+var uuid = require('node-uuid');
 
 function CoreMessaging() {
   var _amqpService = null;
   var _clientCallbacks = [];  // When worker callback invoked, it will call these
   var _masterCallback = null; // When master receives an IPC message
   var _workerCallback = null; // When worker receives an IPC message
+  var _serverId = uuid.v4();
   
-  (function() {
-    if (cluster.isMaster) {
-      setTimeout(function() {
-        emitToAmqp('hello');
-      }, 5000);
-    }
-  })();
-  
+  function buildMessage(type, messageContent, originalSenderProcessId) {
+    return {
+      type: type,
+      message: messageContent,
+      originalSenderProcessId: originalSenderProcessId
+    };
+  }
   
   function initializeAmqp(amqpServerPath) {
     if (_amqpService === null) {
@@ -29,13 +30,13 @@ function CoreMessaging() {
     _clientCallbacks.push(callbackMethod);
   }
   
-  // If a worker receives a message then it needs to be handled
+  // If a worker receives a message then it needs to be forwarded
   function onWorkerIpcMessage(message) {
     if (_clientCallbacks.length === 0)
       console.info('No clients registered to receive messages');
     
     _.forEach(_clientCallbacks, function(method) {
-      method(message);
+      method(message.message);
     });
   }
   
@@ -45,16 +46,20 @@ function CoreMessaging() {
     emitToNonOriginChildProcesses(message);
   }
   function onAmqpMessage(message) {
-    emitToNonOriginChildProcesses(message);
+    if (message.serverId !== _serverId)
+      emitToNonOriginChildProcesses(message);
   }
   
   // Message forwarding services used by master process
   function emitToAmqp(message) {
-    console.log('emitting message');
-    if (_amqpService)
-      _amqpService.sendMessage({messageObject: message});
-    else 
+    _.assign(message, {serverId: _serverId});
+    _.assign(message, {originalSenderProcessId: null});
+    if (_amqpService) {
+      console.log('going out to amqp');
+      _amqpService.sendMessage(message);
+    } else {
       console.info('Amqp not connected');
+    }
   }
   function emitToNonOriginChildProcesses(message) {
     if (_masterCallback)
@@ -77,14 +82,24 @@ function CoreMessaging() {
     return onWorkerIpcMessage;
   }
   
+  // Message sent in by the application messaging service 
+  // May appear this is not going to the message bus, however it is...
+  //   workers can not send directly to the bus, only master may
+  function publish(messageBody) {
+    var message = buildMessage('comm', messageBody, process.pid);
+    emitToNonOriginChildProcesses(message);
+  }
+  
   return {
     // Used by core server
     initializeAmqp: initializeAmqp,
     connectMasterIpcListener: connectMasterIpcListener,
+    emitToAmqp: emitToAmqp,
     getOnMessageToWorkerIpcConsumer: getOnMessageToWorkerIpcConsumer,
     
-    // Client usability
-    connectListener: connectListener
+    // Client app messaging api
+    subscribe: connectListener,
+    publish: publish
   }
 }
 
