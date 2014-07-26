@@ -4,11 +4,11 @@ module.exports = {
 	app: {
 		title: 'MEAN.JS',
 		description: 'Full-Stack JavaScript with MongoDB, Express, AngularJS, and Node.js',
-		keywords: 'mongodb, express, angularjs, node.js, mongoose, passport'
+		keywords: 'mongodb, express, angularjs, node.js, mongoose, passport, amqp, socket.io'
 	},
 	port: process.env.PORT || 3000,
 	templateEngine: 'swig',
-	sessionSecret: 'MEAN',
+	sessionSecret: 'ABC_123_!#$',
 	sessionCollection: 'sessions',
 	assets: {
 		lib: {
@@ -22,7 +22,9 @@ module.exports = {
 				'public/lib/angular-animate/angular-animate.js',
 				'public/lib/angular-ui-router/release/angular-ui-router.js',
 				'public/lib/angular-ui-utils/ui-utils.js',
-				'public/lib/angular-bootstrap/ui-bootstrap-tpls.js'
+				'public/lib/angular-bootstrap/ui-bootstrap-tpls.js',				
+        'public/lib/angular-socket-io/socket.js',
+				'public/lib/socket.io-client/socket.io.js'
 			]
 		},
 		css: [
