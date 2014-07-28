@@ -4,14 +4,14 @@
  */
 var _ = require('lodash');
 var init = require('./config/init')(),
-     http = require('http'),
-        cluster = require('cluster'),
-        os = require('os'),
-        monitor = require('./management/cluster'),
-        config = require('./config/config'),
-        mongoose = require('mongoose'),
-        commandLineParser = require('./config/utilities/commandLineParser'),
-        coremessaging = require('./management/coremessaging');
+    http = require('http'),
+    cluster = require('cluster'),
+    os = require('os'),
+    monitor = require('./management/cluster'),
+    config = require('./config/config'),
+    mongoose = require('mongoose'),
+    commandLineParser = require('./config/utilities/commandLineParser'),
+    coremessaging = require('./management/coremessaging');
 
 function hash(ip, seed) {
   var hash = ip.reduce(function(r, num) {
@@ -47,6 +47,7 @@ var app = require('./config/express')(db);
 require('./config/passport')();
 
 if (cluster.isMaster) {
+  var workers = [];
   var commandLineArguments = commandLineParser.parse();
   coremessaging.initializeAmqp(config.amqpPath);
  
@@ -109,15 +110,20 @@ if (cluster.isMaster) {
   // Spin up HTTP servers
   for (var i = 1; i <= (config.workers || coreCount); ++i) {
     var newWorker = spawnWorker(null, debugPort + i);
+    workers[i] = newWorker;
     initializeWorkerHttpProcess(newWorker);
   }
   
   // If an HTTP server dies, respawn it
   cluster.on('exit', function(oldWorker, code, signal) {
     var newWorker = spawnWorker(oldWorker, null);
+    workers[oldWorker.id] = newWorker;
     initializeWorkerHttpProcess(newWorker);
     updateMonitor();
   });
+  
+  
+  coremessaging.publish({test: 'test'});
   
   var net = require('net');
   var seed = ~~(Math.random() * 1e9);
@@ -127,8 +133,9 @@ if (cluster.isMaster) {
           ipHash = hash((c.remoteAddress || '').split(/\./g), seed);
 
       // Pass connection to worker
-      var oneBasedIndex = (ipHash % coreCount) + 1
-      worker = cluster.workers[oneBasedIndex];
+      // TODO: try to find a different persistent value to hash... 
+      var oneBasedIndex = (ipHash % workers.length) + 1
+      worker = workers[oneBasedIndex];
       worker.send('sticky-session:connection', c);
   }).listen(port, function(){
     console.log('Net Server listening on port ' + port + '...');
@@ -160,7 +167,7 @@ if (cluster.isMaster) {
       //app.listen(message.port);
       monitor.setPort(message.port);
       monitor.setDebugPort(message.debugPort);
-      monitor.setProcess(processId); 
+      monitor.setProcess(processId);
     } else if (message.type === 'updatemonitor') {
       monitor.setProcesses(message.processes);
     } else if (message.type === 'comm') {
@@ -170,6 +177,23 @@ if (cluster.isMaster) {
       // Then we forward this information to the http server
       server.emit('connection', socket);
     }
+  });
+  
+  
+  var users = [];
+  io.on('connection', function(socket) {
+    console.log('user connected');
+    if (users.indexOf(socket.id) === -1) {
+      users.push(socket.id);
+    }
+
+    socket.on('disconnect', function(o) {
+      var index = users.indexOf(socket.id);
+      if (index !== -1) {
+        users.splice(index, 1);
+      }
+      console.log(users.length + ' users are connected.');
+    });
   });
 }
 

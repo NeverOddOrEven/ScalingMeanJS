@@ -137,26 +137,5 @@ module.exports = function(db) {
 		});
 	});
 
-/*
-        var users = [];
-        io.on('connection', function(socket) {
-          console.log('user connected');
-          if (users.indexOf(socket.id) === -1) {
-            users.push(socket.id);
-          }
-
-          socket.on('disconnect', function(o) {
-            var index = users.indexOf(socket.id);
-
-            if (index !== -1) {
-              users.splice(index, 1);
-            }
-
-            console.log(users.length + ' users are connected.');
-          });
-        });
-*/
-
-
 	return app;
 };
