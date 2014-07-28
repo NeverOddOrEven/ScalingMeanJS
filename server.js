@@ -40,11 +40,7 @@ function hash(ip, seed) {
 // Bootstrap db connection
 var db = mongoose.connect(config.db);
 
-// Init the express application
-var app = require('./config/express')(db);
-
-// Bootstrap passport config
-require('./config/passport')();
+var app;
 
 if (cluster.isMaster) {
   console.info('Server PID: ' + process.pid);
@@ -145,9 +141,17 @@ if (cluster.isMaster) {
     console.log('Net Server listening on port ' + port + '...');
   });
 } else {
+  // Init the express application
+  app = require('./config/express')(db);
+
+  // Bootstrap passport config
+  require('./config/passport')();
+  
   var server = http.createServer(app);
   var io = require('socket.io').listen(server);
-  var clientComm = require('./app/services/socketio').init(io);
+  
+  var clientComm = require('./app/services/socketio');
+  clientComm.init(io);
   
   var oldListen = server.listen;
   server.listen = function listen() {
@@ -190,7 +194,7 @@ if (cluster.isMaster) {
     if (users.indexOf(socket.id) === -1) {
       users.push(socket.id);
     }
-
+    
     socket.on('disconnect', function(o) {
       var index = users.indexOf(socket.id);
       if (index !== -1) {
