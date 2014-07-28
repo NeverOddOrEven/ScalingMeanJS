@@ -11,5 +11,8 @@ angular.module('core').controller('HomeController', ['$scope', '$location', 'Aut
     
     var _socket = io.connect(url) || null;
     
+    _socket.on('test', function(data) {
+      console.info(data);
+    });
 	}
 ]);

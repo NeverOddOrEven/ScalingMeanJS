@@ -1,20 +1,10 @@
 'use strict';
 
-var messaging = require('../services/messaging');
+var messaging = require('../services/messaging'),
+    clientcomm = require('../services/socketio');
 
-  (function() {
-    setTimeout(function() {
-      messaging.publish('magic' + process.pid);
-    }, 5000);
-  })();
-  
-
-messaging.subscribe(function(message) {
-  console.log('1 - ' + message);
-});
-
-messaging.subscribe(function(message) {
-  console.log('2 - ' + message);
+messaging.subscribe('new.server.online', function(message) {
+  clientcomm.publish('test', {hi: 'hi'});
 });
 
 /**

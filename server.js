@@ -47,6 +47,8 @@ var app = require('./config/express')(db);
 require('./config/passport')();
 
 if (cluster.isMaster) {
+  console.info('Server PID: ' + process.pid);
+  
   var workers = [];
   var commandLineArguments = commandLineParser.parse();
   coremessaging.initializeAmqp(config.amqpPath);
@@ -110,39 +112,42 @@ if (cluster.isMaster) {
   // Spin up HTTP servers
   for (var i = 1; i <= (config.workers || coreCount); ++i) {
     var newWorker = spawnWorker(null, debugPort + i);
-    workers[i] = newWorker;
+    workers.push(newWorker);
     initializeWorkerHttpProcess(newWorker);
   }
   
-  // If an HTTP server dies, respawn it
+  // If an HTTP instance dies, respawn it
   cluster.on('exit', function(oldWorker, code, signal) {
+    _.remove(workers, function(worker) {
+      return worker.id === oldWorker.id;
+    })
     var newWorker = spawnWorker(oldWorker, null);
-    workers[oldWorker.id] = newWorker;
+    workers.push(newWorker);
     initializeWorkerHttpProcess(newWorker);
     updateMonitor();
   });
   
-  
-  coremessaging.publish({test: 'test'});
+  coremessaging.publish('new.server.online', { cores: coreCount });
   
   var net = require('net');
   var seed = ~~(Math.random() * 1e9);
-  var stickyServer = net.createServer(function(c) { //'connection' listener
+  var stickyServer = net.createServer(function(socket) { //'connection' listener
     // Get int31 hash of ip
-      var worker,
-          ipHash = hash((c.remoteAddress || '').split(/\./g), seed);
+    var worker,
+        ipHash = hash((socket.remoteAddress || '').split(/\./g), seed);
 
-      // Pass connection to worker
-      // TODO: try to find a different persistent value to hash... 
-      var oneBasedIndex = (ipHash % workers.length) + 1
-      worker = workers[oneBasedIndex];
-      worker.send('sticky-session:connection', c);
+    // Pass connection to worker
+    // TODO: try to find a different persistent value to hash... 
+    var index = (ipHash % workers.length);
+    worker = workers[index];
+    worker.send('sticky-session:connection', socket);
   }).listen(port, function(){
     console.log('Net Server listening on port ' + port + '...');
   });
 } else {
   var server = http.createServer(app);
   var io = require('socket.io').listen(server);
+  var clientComm = require('./app/services/socketio').init(io);
   
   var oldListen = server.listen;
   server.listen = function listen() {
@@ -162,9 +167,8 @@ if (cluster.isMaster) {
   cluster.worker.on('message', function(message, socket) {
     if (message.type === 'httpstart') {
       var processId = cluster.worker.process.pid;
-      console.log('Process: ' + processId + ', listening on port: ' + message.port + '...');
-      
-      //app.listen(message.port);
+      console.log('Process: ' + processId + ', listening on provided socket connection...');
+
       monitor.setPort(message.port);
       monitor.setDebugPort(message.debugPort);
       monitor.setProcess(processId);

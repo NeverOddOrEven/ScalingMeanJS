@@ -1,21 +1,14 @@
 'use strict';
 
 var coremessaging = require('../../management/coremessaging');
-var cluster = require('cluster');
-var _ = require('lodash');
-
 
 var AppMessaging = function() {
-  
-
-  var _amqp = null;
-  
-  function subscribe(callback) {
-    coremessaging.subscribe(callback);
+  function subscribe(route, callback) {
+    coremessaging.subscribe(route, callback);
   }
   
-  function publish(message) {
-    coremessaging.publish(message);
+  function publish(route, message) {
+    coremessaging.publish(route, message);
   }
   
   return {

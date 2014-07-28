@@ -10,9 +10,10 @@ function CoreMessaging() {
   var _workerCallback = null; // When worker receives an IPC message
   var _serverId = uuid.v4();
   
-  function buildMessage(type, messageContent, originalSenderProcessId) {
+  function buildMessage(type, route, messageContent, originalSenderProcessId) {
     return {
       type: type,
+      route: route,
       message: messageContent,
       originalSenderProcessId: originalSenderProcessId
     };
@@ -26,16 +27,20 @@ function CoreMessaging() {
   }
   
   // End point consumers will register their methods with this
-  function connectListener(callbackMethod) {
-    _clientCallbacks.push(callbackMethod);
+  function connectListener(route, callbackMethod) {
+    if (!_clientCallbacks[route])
+      _clientCallbacks[route] = [];
+    
+    _clientCallbacks[route].push(callbackMethod);
   }
   
   // If a worker receives a message then it needs to be forwarded
   function onWorkerIpcMessage(message) {
-    if (_clientCallbacks.length === 0)
-      console.info('No clients registered to receive messages');
+    if (!_clientCallbacks[message.route]) {
+      console.info('No clients registered to receive message on route: ' + message.route.toString());
+    }
     
-    _.forEach(_clientCallbacks, function(method) {
+    _.forEach(_clientCallbacks[message.route], function(method) {
       method(message.message);
     });
   }
@@ -85,8 +90,8 @@ function CoreMessaging() {
   // Message sent in by the application messaging service 
   // May appear this is not going to the message bus, however it is...
   //   workers can not send directly to the bus, only master may
-  function publish(messageBody) {
-    var message = buildMessage('comm', messageBody, process.pid);
+  function publish(route, messageBody) {
+    var message = buildMessage('comm', route, messageBody, process.pid);
     emitToNonOriginChildProcesses(message);
   }
   
