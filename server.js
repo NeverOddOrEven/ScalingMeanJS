@@ -4,6 +4,7 @@
  */
 var _ = require('lodash');
 var init = require('./config/init')(),
+     http = require('http'),
         cluster = require('cluster'),
         os = require('os'),
         monitor = require('./management/cluster'),
@@ -11,6 +12,25 @@ var init = require('./config/init')(),
         mongoose = require('mongoose'),
         commandLineParser = require('./config/utilities/commandLineParser'),
         coremessaging = require('./management/coremessaging');
+
+function hash(ip, seed) {
+  var hash = ip.reduce(function(r, num) {
+    r += parseInt(num, 10);
+    r %= 2147483648;
+    r += (r << 10)
+    r %= 2147483648;
+    r ^= r >> 6;
+    return r;
+  }, seed);
+
+  hash += hash << 3;
+  hash %= 2147483648;
+  hash ^= hash >> 11;
+  hash += hash << 15;
+  hash %= 2147483648;
+
+  return hash >>> 0;
+}
 
 /**
  * Main application entry file.
@@ -98,18 +118,46 @@ if (cluster.isMaster) {
     initializeWorkerHttpProcess(newWorker);
     updateMonitor();
   });
+  
+  var net = require('net');
+  var seed = ~~(Math.random() * 1e9);
+  var stickyServer = net.createServer(function(c) { //'connection' listener
+    // Get int31 hash of ip
+      var worker,
+          ipHash = hash((c.remoteAddress || '').split(/\./g), seed);
+
+      // Pass connection to worker
+      var oneBasedIndex = (ipHash % coreCount) + 1
+      worker = cluster.workers[oneBasedIndex];
+      worker.send('sticky-session:connection', c);
+  }).listen(port, function(){
+    console.log('Net Server listening on port ' + port + '...');
+  });
 } else {
+  var server = http.createServer(app);
+  var io = require('socket.io').listen(server);
+  
+  var oldListen = server.listen;
+  server.listen = function listen() {
+    var lastArg = arguments[arguments.length - 1];
+
+    if (typeof lastArg === 'function') lastArg();
+
+    return oldListen.call(this, null);
+  };
+  
   coremessaging.connectMasterIpcListener(
     function(message) {
       cluster.worker.send(message);
     }
   );
   
-  cluster.worker.on('message', function(message) {
+  cluster.worker.on('message', function(message, socket) {
     if (message.type === 'httpstart') {
       var processId = cluster.worker.process.pid;
       console.log('Process: ' + processId + ', listening on port: ' + message.port + '...');
-      app.listen(message.port);
+      
+      //app.listen(message.port);
       monitor.setPort(message.port);
       monitor.setDebugPort(message.debugPort);
       monitor.setProcess(processId); 
@@ -117,6 +165,10 @@ if (cluster.isMaster) {
       monitor.setProcesses(message.processes);
     } else if (message.type === 'comm') {
       coremessaging.getOnMessageToWorkerIpcConsumer()(message);
+    } else if (message === 'sticky-session:connection') {
+      // The net server in master tells us which socket to use
+      // Then we forward this information to the http server
+      server.emit('connection', socket);
     }
   });
 }

@@ -4,7 +4,7 @@
  * Module dependencies.
  */
 var express = require('express'),
-        http = require('http'),
+       
 	morgan = require('morgan'),
 	bodyParser = require('body-parser'),
 	session = require('express-session'),
@@ -24,8 +24,6 @@ var express = require('express'),
 module.exports = function(db) {
 	// Initialize express app
 	var app = express();
-        var server = http.createServer(app);
-        var io = require('socket.io').listen(server);
 
 	// Globbing model files
 	config.getGlobbedFiles('./app/models/**/*.js').forEach(function(modelPath) {
@@ -139,6 +137,7 @@ module.exports = function(db) {
 		});
 	});
 
+/*
         var users = [];
         io.on('connection', function(socket) {
           console.log('user connected');
@@ -156,7 +155,8 @@ module.exports = function(db) {
             console.log(users.length + ' users are connected.');
           });
         });
+*/
 
 
-	return server;
+	return app;
 };
