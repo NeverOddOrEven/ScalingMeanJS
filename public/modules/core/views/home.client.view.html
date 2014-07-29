@@ -3,7 +3,10 @@
 		<div class="row">
 		</div>
 		<div class="row">
-      <p>Hi</p>
+      <span>{{server}}</span>
+      <div ng-repeat="server in servers" class="each-server">
+        <server server-data="{{server}}"></server>
+      </div>
 		</div>
 		<div class="row">
 		</div>

@@ -3,16 +3,12 @@
 var messaging = require('../services/messaging'),
     clientcomm = require('../services/socketio');
 
+var uuid = require('node-uuid');
 
-messaging.subscribe('new.server.online', function(message) {
-  clientcomm.publish('test', {hi: 'hi'});
+
+messaging.subscribe('server.update', function(message) {
+  clientcomm.publish('server.update.client', message);
 });
-
-for (var i = 1; i <= 10; ++i) {
-  setTimeout(function() {
-    clientcomm.publish('test', 'hello there');
-  }, i * 5000);
-}
 
 /**
  * Module dependencies.

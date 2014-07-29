@@ -45,6 +45,11 @@ function CoreMessaging() {
     });
   }
   
+  function fromMasterToAll(route, message) {
+    var message = buildMessage('comm', route, message, process.pid);
+    onMasterIpcMessage(message);
+  }
+  
   // If a master receives a message then it needs to be transmitted to everyone else
   function onMasterIpcMessage(message) {
     emitToAmqp(message);
@@ -104,7 +109,8 @@ function CoreMessaging() {
     
     // Client app messaging api
     subscribe: connectListener,
-    publish: publish
+    publish: publish,
+    broadcast: fromMasterToAll
   }
 }
 

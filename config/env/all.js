@@ -24,7 +24,8 @@ module.exports = {
 				'public/lib/angular-ui-utils/ui-utils.js',
 				'public/lib/angular-bootstrap/ui-bootstrap-tpls.js',				
         'public/lib/angular-socket-io/socket.js',
-				'public/lib/socket.io-client/socket.io.js'
+				'public/lib/socket.io-client/socket.io.js',
+        'public/lib/lodash/dist/lodash.underscore.min.js'
 			]
 		},
 		css: [

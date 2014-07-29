@@ -30,8 +30,10 @@ var ClientComm = function() {
       console.log('saving message: ' + JSON.stringify(message) + '. Is Master: ' + cluster.isMaster);
       _queue.push({route: route, message: message});
     } else {
-      console.log('sending message');
-      _socketio.emit(route, message);
+      if (_socketio.numConnectedClients > 0) {
+        console.log('sending message');
+        _socketio.emit(route, JSON.stringify(message));
+      }
     }
   }
 

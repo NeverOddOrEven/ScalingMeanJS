@@ -7,3 +7,20 @@
 [ng\:cloak], [ng-cloak], [data-ng-cloak], [x-ng-cloak], .ng-cloak, .x-ng-cloak {
 	display: none !important;
 }
+
+.server {
+  border: 1px solid #000;
+}
+
+.server.ok {
+  background-color: #5eb75e;
+  color: #FFF;
+}
+.server.warn {
+  background-color: #d0c009;
+  color: #000;
+}
+.server.fail {
+  background-color: #ad3a1e;
+  color: #FFF;
+}

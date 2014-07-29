@@ -3,6 +3,7 @@
  * Module dependencies.
  */
 var _ = require('lodash');
+var uuid = require('node-uuid');
 var init = require('./config/init')(),
     http = require('http'),
     cluster = require('cluster'),
@@ -43,7 +44,9 @@ var db = mongoose.connect(config.db);
 var app;
 
 if (cluster.isMaster) {
+  var serverId = uuid.v4();
   console.info('Server PID: ' + process.pid);
+  console.info('Server ID: ' + serverId);
   
   var workers = [];
   var commandLineArguments = commandLineParser.parse();
@@ -67,7 +70,7 @@ if (cluster.isMaster) {
   
   var port = commandLineArguments.port || config.port || 3000;
   var debugPort = config.debugPort || 5858;
-  var coreCount = os.cpus().length;
+  var coreCount = os.cpus().length - 1;
   
   var updateMonitor = function() {
     var processIds = _.mapValues(cluster.workers, function(worker) { return worker.process.pid; });
@@ -123,7 +126,9 @@ if (cluster.isMaster) {
     updateMonitor();
   });
   
-  coremessaging.publish('new.server.online', { cores: coreCount });
+  setInterval(function() {
+    coremessaging.broadcast('server.update', { serverId: serverId, coreCount: coreCount, timeStamp: Date.now(), status: 'ok' });
+  }, 2000);
   
   var net = require('net');
   var seed = ~~(Math.random() * 1e9);
@@ -135,6 +140,7 @@ if (cluster.isMaster) {
     // Pass connection to worker
     // TODO: try to find a different persistent value to hash... 
     var index = (ipHash % workers.length);
+    console.log('Connection going to worker: ' + index);
     worker = workers[index];
     worker.send('sticky-session:connection', socket);
   }).listen(port, function(){
@@ -195,11 +201,17 @@ if (cluster.isMaster) {
       users.push(socket.id);
     }
     
+    // Total hack. Getting tired by this point... 
+    // at the very least I should make a new object container...
+    _.assign(io, {numConnectedClients: users.length});
+    
     socket.on('disconnect', function(o) {
+      console.info(o);
       var index = users.indexOf(socket.id);
       if (index !== -1) {
         users.splice(index, 1);
       }
+      _.assign(io, {numConnectedClients: users.length});
       console.log(users.length + ' users are connected.');
     });
   });
